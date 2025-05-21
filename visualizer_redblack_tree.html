@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Red-Black Tree Visualizer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f0f0f0;
+      text-align: center;
+    }
+    .controls {
+      padding: 20px;
+      background: white;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    input, button {
+      padding: 10px;
+      font-size: 16px;
+      margin: 5px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .tree-container {
+      position: relative;
+      min-height: 600px;
+      overflow: auto;
+      margin: 30px auto;
+      width: 90%;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      padding: 20px;
+    }
+    .node {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-weight: bold;
+      position: absolute;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .black { background: #2d3436; border: 2px solid #000; }
+    .red { background: #ff6b6b; border: 2px solid #d32f2f; }
+    svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      z-index: 0;
+    }
+    .log {
+      background: #333;
+      color: white;
+      padding: 15px;
+      margin: 20px auto;
+      width: 90%;
+      border-radius: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      text-align: left;
+      font-family: monospace;
+    }
+    .null-node {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ddd;
+      position: absolute;
+    }
+  </style>
+</head>
+<body>
+
+<div class="controls">
+  <h2>Red-Black Tree Visualizer</h2>
+  <input type="number" id="nodeValue" placeholder="Enter value">
+  <button onclick="insertNode()">Insert</button>
+  <button onclick="deleteNode()">Delete</button>
+  <button onclick="clearTree()">Clear Tree</button>
+  <button onclick="generateRandom()">Random Tree</button>
+  <button onclick="downloadTreeJSON()">Export JSON</button>
+</div>
+
+<div class="tree-container" id="treeContainer">
+  <svg id="svgLines"></svg>
+</div>
+
+<div class="log" id="operationLog"></div>
+
+<script>
+class Node {
+  constructor(value, color = 'RED') {
+    this.value = value;
+    this.color = color;
+    this.left = null;
+    this.right = null;
+    this.parent = null;
+    this.x = 0;
+    this.y = 0;
+  }
+
+  isRed() { return this.color === 'RED'; }
+  isBlack() { return this.color === 'BLACK'; }
+  setRed() { this.color = 'RED'; }
+  setBlack() { this.color = 'BLACK'; }
+}
+
+class RedBlackTree {
+  constructor() {
+    this.root = null;
+    this.NULL_NODE = new Node(null, 'BLACK');
+    this.spacingX = 80;
+    this.spacingY = 100;
+  }
+
+  insert(value) {
+    logOperation(`Inserting ${value}`);
+    const newNode = new Node(value);
+    newNode.left = this.NULL_NODE;
+    newNode.right = this.NULL_NODE;
+    
+    if (!this.root) {
+      this.root = newNode;
+      this.root.setBlack();
+      return;
+    }
+    
+    this._bstInsert(newNode);
+    this.fixInsert(newNode);
+    this.root.setBlack();
+  }
+
+  _bstInsert(newNode) {
+    let current = this.root;
+    while (true) {
+      if (newNode.value < current.value) {
+        if (current.left === this.NULL_NODE) {
+          current.left = newNode;
+          newNode.parent = current;
+          return;
+        }
+        current = current.left;
+      } else {
+        if (current.right === this.NULL_NODE) {
+          current.right = newNode;
+          newNode.parent = current;
+          return;
+        }
+        current = current.right;
+      }
+    }
+  }
+
+  fixInsert(node) {
+    while (node !== this.root && node.parent.isRed()) {
+      let parent = node.parent;
+      let grandparent = parent.parent;
+      
+      if (parent === grandparent.left) {
+        let uncle = grandparent.right;
+        
+        // Case 1: Uncle is red
+        if (uncle.isRed()) {
+          logOperation(`Case 1: Recoloring nodes ${parent.value}, ${uncle.value}, ${grandparent.value}`);
+          parent.setBlack();
+          uncle.setBlack();
+          grandparent.setRed();
+          node = grandparent;
+        } else {
+          // Case 2: Node is right child
+          if (node === parent.right) {
+            logOperation(`Case 2: Left rotating at ${parent.value}`);
+            node = parent;
+            this.rotateLeft(node);
+          }
+          
+          // Case 3: Node is left child
+          logOperation(`Case 3: Recoloring ${parent.value} and ${grandparent.value}, right rotating at ${grandparent.value}`);
+          parent.setBlack();
+          grandparent.setRed();
+          this.rotateRight(grandparent);
+        }
+      } else {
+        let uncle = grandparent.left;
+        
+        // Case 1: Uncle is red
+        if (uncle.isRed()) {
+          logOperation(`Case 1: Recoloring nodes ${parent.value}, ${uncle.value}, ${grandparent.value}`);
+          parent.setBlack();
+          uncle.setBlack();
+          grandparent.setRed();
+          node = grandparent;
+        } else {
+          // Case 2: Node is left child
+          if (node === parent.left) {
+            logOperation(`Case 2: Right rotating at ${parent.value}`);
+            node = parent;
+            this.rotateRight(node);
+          }
+          
+          // Case 3: Node is right child
+          logOperation(`Case 3: Recoloring ${parent.value} and ${grandparent.value}, left rotating at ${grandparent.value}`);
+          parent.setBlack();
+          grandparent.setRed();
+          this.rotateLeft(grandparent);
+        }
+      }
+    }
+  }
+
+  rotateLeft(x) {
+    let y = x.right;
+    x.right = y.left;
+    
+    if (y.left !== this.NULL_NODE) {
+      y.left.parent = x;
+    }
+    
+    y.parent = x.parent;
+    
+    if (!x.parent) {
+      this.root = y;
+    } else if (x === x.parent.left) {
+      x.parent.left = y;
+    } else {
+      x.parent.right = y;
+    }
+    
+    y.left = x;
+    x.parent = y;
+  }
+
+  rotateRight(x) {
+    let y = x.left;
+    x.left = y.right;
+    
+    if (y.right !== this.NULL_NODE) {
+      y.right.parent = x;
+    }
+    
+    y.parent = x.parent;
+    
+    if (!x.parent) {
+      this.root = y;
+    } else if (x === x.parent.right) {
+      x.parent.right = y;
+    } else {
+      x.parent.left = y;
+    }
+    
+    y.right = x;
+    x.parent = y;
+  }
+
+  delete(value) {
+    logOperation(`Deleting ${value}`);
+    let node = this.search(value);
+    if (!node || node === this.NULL_NODE) {
+      logOperation(`Node ${value} not found`);
+      return;
+    }
+
+    let originalColor = node.color;
+    let x;
+
+    if (node.left === this.NULL_NODE) {
+      x = node.right;
+      this.transplant(node, node.right);
+    } else if (node.right === this.NULL_NODE) {
+      x = node.left;
+      this.transplant(node, node.left);
+    } else {
+      let successor = this.minimum(node.right);
+      originalColor = successor.color;
+      x = successor.right;
+
+      if (successor.parent === node) {
+        x.parent = successor;
+      } else {
+        this.transplant(successor, successor.right);
+        successor.right = node.right;
+        successor.right.parent = successor;
+      }
+
+      this.transplant(node, successor);
+      successor.left = node.left;
+      successor.left.parent = successor;
+      successor.color = node.color;
+    }
+
+    if (originalColor === 'BLACK') {
+      this.fixDelete(x);
+    }
+    
+    this.render();
+  }
+
+  fixDelete(node) {
+    while (node !== this.root && node.isBlack()) {
+      if (node === node.parent.left) {
+        let sibling = node.parent.right;
+        
+        // Case 1: Sibling is red
+        if (sibling.isRed()) {
+          logOperation(`Delete Case 1: Recoloring sibling ${sibling.value} and parent ${node.parent.value}, left rotating at ${node.parent.value}`);
+          sibling.setBlack();
+          node.parent.setRed();
+          this.rotateLeft(node.parent);
+          sibling = node.parent.right;
+        }
+        
+        // Case 2: Both sibling's children are black
+        if (sibling.left.isBlack() && sibling.right.isBlack()) {
+          logOperation(`Delete Case 2: Recoloring sibling ${sibling.value}`);
+          sibling.setRed();
+          node = node.parent;
+        } else {
+          // Case 3: Sibling's right child is black
+          if (sibling.right.isBlack()) {
+            logOperation(`Delete Case 3: Recoloring sibling ${sibling.value} and its left child ${sibling.left.value}, right rotating at ${sibling.value}`);
+            sibling.left.setBlack();
+            sibling.setRed();
+            this.rotateRight(sibling);
+            sibling = node.parent.right;
+          }
+          
+          // Case 4: Sibling's right child is red
+          logOperation(`Delete Case 4: Recoloring nodes and left rotating at ${node.parent.value}`);
+          sibling.color = node.parent.color;
+          node.parent.setBlack();
+          sibling.right.setBlack();
+          this.rotateLeft(node.parent);
+          node = this.root;
+        }
+      } else {
+        let sibling = node.parent.left;
+        
+        // Case 1: Sibling is red
+        if (sibling.isRed()) {
+          logOperation(`Delete Case 1: Recoloring sibling ${sibling.value} and parent ${node.parent.value}, right rotating at ${node.parent.value}`);
+          sibling.setBlack();
+          node.parent.setRed();
+          this.rotateRight(node.parent);
+          sibling = node.parent.left;
+        }
+        
+        // Case 2: Both sibling's children are black
+        if (sibling.right.isBlack() && sibling.left.isBlack()) {
+          logOperation(`Delete Case 2: Recoloring sibling ${sibling.value}`);
+          sibling.setRed();
+          node = node.parent;
+        } else {
+          // Case 3: Sibling's left child is black
+          if (sibling.left.isBlack()) {
+            logOperation(`Delete Case 3: Recoloring sibling ${sibling.value} and its right child ${sibling.right.value}, left rotating at ${sibling.value}`);
+            sibling.right.setBlack();
+            sibling.setRed();
+            this.rotateLeft(sibling);
+            sibling = node.parent.left;
+          }
+          
+          // Case 4: Sibling's left child is red
+          logOperation(`Delete Case 4: Recoloring nodes and right rotating at ${node.parent.value}`);
+          sibling.color = node.parent.color;
+          node.parent.setBlack();
+          sibling.left.setBlack();
+          this.rotateRight(node.parent);
+          node = this.root;
+        }
+      }
+    }
+    node.setBlack();
+  }
+
+  transplant(u, v) {
+    if (!u.parent) {
+      this.root = v;
+    } else if (u === u.parent.left) {
+      u.parent.left = v;
+    } else {
+      u.parent.right = v;
+    }
+    v.parent = u.parent;
+  }
+
+  minimum(node) {
+    while (node.left !== this.NULL_NODE) {
+      node = node.left;
+    }
+    return node;
+  }
+
+  search(value) {
+    let current = this.root;
+    while (current !== null && current !== this.NULL_NODE) {
+      if (value === current.value) {
+        return current;
+      } else if (value < current.value) {
+        current = current.left;
+      } else {
+        current = current.right;
+      }
+    }
+    return null;
+  }
+
+  assignCoords() {
+    let i = 0;
+    const assign = (node, depth) => {
+      if (!node || node === this.NULL_NODE) return;
+      assign(node.left, depth + 1);
+      node.x = i++ * this.spacingX;
+      node.y = depth * this.spacingY;
+      assign(node.right, depth + 1);
+    };
+    assign(this.root, 0);
+  }
+
+  getAllNodes() {
+    const list = [];
+    const traverse = (node) => {
+      if (!node || node === this.NULL_NODE) return;
+      list.push(node);
+      traverse(node.left);
+      traverse(node.right);
+    };
+    traverse(this.root);
+    return list;
+  }
+
+  toJSON() {
+    const serialize = (node) => {
+      if (!node || node === this.NULL_NODE) return null;
+      return {
+        value: node.value,
+        color: node.color,
+        left: serialize(node.left),
+        right: serialize(node.right)
+      };
+    };
+    return serialize(this.root);
+  }
+
+  clear() {
+    this.root = null;
+  }
+}
+
+const tree = new RedBlackTree();
+
+function logOperation(message) {
+  const log = document.getElementById('operationLog');
+  const entry = document.createElement('div');
+  entry.textContent = message;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+}
+
+function insertNode() {
+  const val = parseInt(document.getElementById('nodeValue').value);
+  if (isNaN(val)) {
+    alert('Please enter a valid number');
+    return;
+  }
+  tree.insert(val);
+  renderTree();
+  document.getElementById('nodeValue').value = '';
+}
+
+function deleteNode() {
+  const val = parseInt(document.getElementById('nodeValue').value);
+  if (isNaN(val)) {
+    alert('Please enter a valid number');
+    return;
+  }
+  tree.delete(val);
+  renderTree();
+  document.getElementById('nodeValue').value = '';
+}
+
+function clearTree() {
+  logOperation('Clearing the tree');
+  tree.clear();
+  renderTree();
+}
+
+function generateRandom() {
+  clearTree();
+  const count = Math.floor(Math.random() * 10) + 5;
+  logOperation(`Generating random tree with ${count} nodes`);
+  
+  for (let i = 0; i < count; i++) {
+    const value = Math.floor(Math.random() * 100);
+    tree.insert(value);
+  }
+  
+  renderTree();
+}
+
+function renderTree() {
+  const container = document.getElementById('treeContainer');
+  const svg = document.getElementById('svgLines');
+  container.innerHTML = '';
+  container.appendChild(svg);
+  svg.innerHTML = '';
+
+  tree.assignCoords();
+  const nodes = tree.getAllNodes();
+  if (nodes.length === 0) return;
+
+  const minX = Math.min(...nodes.map(n => n.x));
+  const maxX = Math.max(...nodes.map(n => n.x));
+  const totalWidth = maxX - minX + 100;
+  const offsetX = container.offsetWidth / 2 - totalWidth / 2 - minX;
+
+  // Draw connections first (so nodes appear on top)
+  nodes.forEach(node => {
+    if (node.parent && node.parent !== tree.NULL_NODE) {
+      const x1 = node.parent.x + 25 + offsetX;
+      const y1 = node.parent.y + 25;
+      const x2 = node.x + 25 + offsetX;
+      const y2 = node.y + 25;
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", x1);
+      line.setAttribute("y1", y1);
+      line.setAttribute("x2", x2);
+      line.setAttribute("y2", y2);
+      line.setAttribute("stroke", "#555");
+      line.setAttribute("stroke-width", "2");
+      svg.appendChild(line);
+    }
+  });
+
+  // Draw nodes
+  nodes.forEach(node => {
+    const div = document.createElement('div');
+    div.className = `node ${node.color === 'RED' ? 'red' : 'black'}`;
+    div.textContent = node.value;
+    div.style.left = (node.x + offsetX) + 'px';
+    div.style.top = (node.y + 20) + 'px';
+    div.style.opacity = 0;
+    div.style.transform = 'scale(0.5)';
+    setTimeout(() => {
+      div.style.opacity = 1;
+      div.style.transform = 'scale(1)';
+    }, 10);
+    container.appendChild(div);
+  });
+
+  // Draw NULL nodes
+  nodes.forEach(node => {
+    if (node.left === tree.NULL_NODE) {
+      const nullNode = document.createElement('div');
+      nullNode.className = 'null-node';
+      nullNode.style.left = (node.x + offsetX - 20) + 'px';
+      nullNode.style.top = (node.y + 70) + 'px';
+      container.appendChild(nullNode);
+      
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", node.x + 25 + offsetX);
+      line.setAttribute("y1", node.y + 50);
+      line.setAttribute("x2", node.x + offsetX - 10);
+      line.setAttribute("y2", node.y + 80);
+      line.setAttribute("stroke", "#555");
+      line.setAttribute("stroke-width", "2");
+      svg.appendChild(line);
+    }
+    
+    if (node.right === tree.NULL_NODE) {
+      const nullNode = document.createElement('div');
+      nullNode.className = 'null-node';
+      nullNode.style.left = (node.x + offsetX + 50) + 'px';
+      nullNode.style.top = (node.y + 70) + 'px';
+      container.appendChild(nullNode);
+      
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", node.x + 25 + offsetX);
+      line.setAttribute("y1", node.y + 50);
+      line.setAttribute("x2", node.x + offsetX + 60);
+      line.setAttribute("y2", node.y + 80);
+      line.setAttribute("stroke", "#555");
+      line.setAttribute("stroke-width", "2");
+      svg.appendChild(line);
+    }
+  });
+}
+
+function downloadTreeJSON() {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(tree.toJSON(), null, 2));
+  const dlAnchor = document.createElement('a');
+  dlAnchor.setAttribute("href", dataStr);
+  dlAnchor.setAttribute("download", "rbtree.json");
+  dlAnchor.click();
+}
+
+// Initial render
+renderTree();
+</script>
+</body>
+</html>
